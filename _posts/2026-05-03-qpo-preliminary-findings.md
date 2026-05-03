@@ -18,7 +18,7 @@ Prompt feature selection is a natural fit for QUBO (Quadratic Unconstrained Bina
 
 The pipeline has five stages: decompose the goal into features, generate candidate prompts from those features, pre-score each candidate with a small model, hand the top candidates to QAOA to shortlist a combination, deep-evaluate the result. The classical baseline is deliberately dumb: take the top-K by pre-score rank, no combinatorial reasoning at all.
 
-For this run: QAOA simulated on PennyLane `lightning.gpu` (CUDA-accelerated statevector simulator on a local Linux box — not physical QPU hardware), pre-scoring and deep evaluation on `granite4.1:3b` and `granite4.1:8b` running on Mac Ollama over Tailscale. `circuit_depth=3`, `num_iterations=50`, 20 qubits.
+For this run: QAOA simulated on PennyLane `lightning.gpu` (CUDA-accelerated statevector simulator on a local Linux box — not physical QPU hardware), pre-scoring and deep evaluation on `granite4.1:3b` and `granite4.1:8b` on Mac Ollama. `circuit_depth=3`, `num_iterations=50`, 20 qubits.
 
 ---
 
