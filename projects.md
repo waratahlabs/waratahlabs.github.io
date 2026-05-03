@@ -24,10 +24,3 @@ Phase 1 runs on a CUDA-accelerated simulator. Next phases: larger circuits (50 q
 
 *Status: Phase 1 complete — results published*
 
----
-
-## KYC React Native Library
-
-On-device identity verification for React Native. NFC ePassport reading, OCR, face match — all on-device, no PII transmitted. The institution gets a proof, not the document.
-
-*Status: active development*
