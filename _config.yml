@@ -1,0 +1,16 @@
+title: Waratah Labs
+description: Hardware-first AI and security research.
+url: "https://waratahlabs.github.io"
+author: Waratah Labs
+
+remote_theme: riggraz/no-style-please
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-feed
+
+permalink: /:year/:month/:day/:title/
+future: true
+
+no-style-please:
+  appearance: "auto"
