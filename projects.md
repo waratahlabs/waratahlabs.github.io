@@ -33,5 +33,6 @@ Phase 1 ran on a CUDA-accelerated simulator. Phase 2 extended to larger circuits
 
 *[Phase 1 results (n=50) →](/2026/05/03/qpo-preliminary-findings/)*
 *[Phase 2 results →](/2026/05/05/qpo-phase2/)*
+*[Preprint on Zenodo →](https://doi.org/10.5281/zenodo.20394090)*
 
-*Status: Phase 2 complete — Phase 3 in planning*
+*Status: preprint published (Zenodo, 2026-05-26)*
