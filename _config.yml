@@ -14,3 +14,4 @@ future: true
 
 no-style-please:
   appearance: "auto"
+  date_format: "%Y-%m-%d"

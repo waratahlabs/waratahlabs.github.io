@@ -1,11 +1,11 @@
 entries:
+- title: projects
+  url: /projects/
+- title: about
+  url: /about/
 - title: posts
   post_list:
     limit: 10
     show_more: true
     show_more_url: /posts/
     show_more_text: all posts
-- title: projects
-  url: /projects/
-- title: about
-  url: /about/
