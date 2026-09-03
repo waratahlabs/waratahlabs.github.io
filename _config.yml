@@ -12,6 +12,6 @@ plugins:
 permalink: /:year/:month/:day/:title/
 future: true
 
-no-style-please:
+theme_config:
   appearance: "auto"
   date_format: "%Y-%m-%d"
