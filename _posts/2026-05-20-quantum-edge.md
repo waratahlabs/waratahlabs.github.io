@@ -4,6 +4,8 @@ title: "The Quantum Edge: Running QAOA on a Phone"
 date: 2026-05-20
 ---
 
+*Project page (QPO explained, benchmarks, FAQ, App Store link): [waratahlabs.com/project/quantum-edge](/project/quantum-edge/)*
+
 I shipped an iOS app to the App Store last week. 2MB. No cloud dependency. Runs quantum circuits natively on Metal.
 
 The benchmark result that surprised me most: an M1 iPad Pro and an iPhone 16 Pro Max hit the same ceiling. Not close — identical. Both die at n=28 qubits with a 2GB statevector sitting in shared memory. n=29 kills the process with SIGKILL. No warning, no graceful exit — the kernel just disappears.
