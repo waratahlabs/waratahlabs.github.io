@@ -50,8 +50,9 @@ Quantum simulation on consumer hardware has a wall. Quantum Edge doesn't hide it
 | Metal GPU | iPhone 16 Pro Max, A18 Pro (8GB) | ~9.3s | — |
 | Metal GPU | iPhone Air, A19 Pro (11GB usable) | ~10.3s | — |
 | PennyLane CPU (float64) | M1 Pro MacBook (32GB) | 384.5s | 44x slower |
+| Metal GPU | iPhone 13 Mini, A15 (3GB) | 331.91ms (n=27) | — |
 
-**The ceiling is n=28 qubits on every 8GB Apple device tested** — M1 iPad Pro, iPhone 16 Pro Max, iPhone Air, all identical. A 28-qubit statevector is 2GB of complex floats; n=29 is 4GB, and the OS kills the process with an uncatchable SIGKILL. Cross-validated against PennyLane's float64 CPU backend: max amplitude error ≤ 3×10⁻⁷, fidelity 1.0000000000. The float32 GPU math is correct — it's just bounded by memory, not precision.
+**The ceiling is n=28 qubits on every 8GB Apple device tested** — M1 iPad Pro, iPhone 16 Pro Max, iPhone Air, all identical. A 28-qubit statevector is 2GB of complex floats; n=29 is 4GB, and the OS kills the process with an uncatchable SIGKILL. Cross-validated against PennyLane's float64 CPU backend: max amplitude error ≤ 3×10⁻⁷, fidelity 1.0000000000. The float32 GPU math is correct — it's just bounded by memory, not precision. Lower-RAM devices scale the same wall down proportionally — a 3GB iPhone 13 Mini reaches n=27 comfortably before memory becomes the limiting factor.
 
 ---
 
