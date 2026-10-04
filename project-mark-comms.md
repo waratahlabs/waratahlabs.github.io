@@ -53,7 +53,7 @@ Every comment repeats its selected text, so the notes still make sense if someon
 
 Sidemarkr was a web editor that used the same idea. mark-comms reads files it saved. The loader accepts both `sidemarkr:` and `markcomms:` tags, then saves everything in the new format.
 
-I tested this on a real file with 21 comments. All 21 found their text again, and the draft text came back unchanged after a save.
+We tested this on a real file with 21 comments. All 21 found their text again, and the draft text came back unchanged after a save.
 
 ---
 
@@ -61,14 +61,14 @@ I tested this on a real file with 21 comments. All 21 found their text again, an
 
 Your draft and comments are never uploaded. The tool has no server, no accounts, and no fonts or other scripts from third parties.
 
-The one outside request is a page-view count. Like the rest of waratahlabs.com, this page and the tool use [Umami](https://umami.is) to count how many times each page loads. Umami sets no cookies and does not record what is on the page or what you type, so it cannot see your draft. It only tells me which pages get attention. See the [privacy policy](/privacy/). While you work, a copy of the draft is kept in your browser's local storage so a closed tab doesn't lose your comments. Clear your site data, or use "Discard draft" in the More menu, to remove it.
+The one outside request is a page-view count. Like the rest of waratahlabs.com, this page and the tool use [Umami](https://umami.is) to count how many times each page loads. Umami sets no cookies and does not record what is on the page or what you type, so it cannot see your draft. It only tells us which pages get attention. See the [privacy policy](/privacy/). While you work, a copy of the draft is kept in your browser's local storage so a closed tab doesn't lose your comments. Clear your site data, or use "Discard draft" in the More menu, to remove it.
 
 ---
 
 ## Limits
 
 - **Saving.** In Chrome and Edge, Save writes back to the file you opened. In other browsers, Save downloads a copy, and Copy .md puts the text on the clipboard.
-- **Browsers.** I have tested loading, commenting and the saved text in desktop Chrome. Writing back to the opened file, Safari and iPad are not tested yet.
+- **Browsers.** We have tested loading, commenting and the saved text in desktop Chrome. Writing back to the opened file, Safari and iPad are not tested yet.
 - **Formatting.** Tables, lists, quotes, code and links render. HTML blocks and images do not.
 - **Highlights across formatting.** If a selection starts inside bold text and ends outside it, the comment is saved as a footnote but the inline highlight tag is skipped, because it would break the markdown. The page tells you when this happens.
 
@@ -89,6 +89,11 @@ Into the `.md` file when you save, as footnotes at the bottom, plus a link aroun
 
 **Can an AI assistant read the comments?**
 Yes. They are plain text in the file, each with the text it refers to, so any tool that can read a markdown file can read them.
+
+**How is mark-comms different from other markdown review tools?**
+Most tools for reviewing markdown alongside an AI agent need something installed. [md-review](https://github.com/ryo-manba/md-review) is a command-line tool you install with npm, which opens a browser preview. [Crit](https://crit.md) is a local program you run from a terminal. Others, such as Markdown Review, are VS Code extensions. mark-comms is a web page, so there is nothing to install, and the comments are kept inside the markdown file instead of in a separate review file.
+
+The other tools do things this one doesn't. Crit has plugins for coding agents like Claude Code and Cursor, so the agent can pick up your review on its own. With mark-comms you save the file and hand it over yourself. The draft is also read-only here, and it has only been tested in desktop Chrome. If you already work in a terminal or VS Code, one of those may fit better.
 
 **Is it free?**
 Yes.
