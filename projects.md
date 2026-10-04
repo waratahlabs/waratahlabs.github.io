@@ -17,6 +17,17 @@ Code: open source — repo publishing shortly.
 
 ---
 
+## mark-comms
+
+Highlight text in a markdown draft and comment on it, in the browser. The comments are saved inside the `.md` file as plain text, so a person or an AI assistant can read them later. Reads files saved by the old Sidemarkr editor.
+
+*[Project page →](/project/mark-comms/)*  
+*[Open the tool →](/project/mark-comms/app/)*
+
+*Status: working prototype*
+
+---
+
 ## QPO — Quantum Prompt Optimisation
 
 QUBO/QAOA formulations for prompt feature space search. Prompt quality is a combinatorial problem — feature interactions determine outcomes in ways linear scoring can't capture. QPO formulates feature selection as a QUBO and solves it with QAOA, running the combinatorial search on gate-based quantum hardware rather than greedy approximation.

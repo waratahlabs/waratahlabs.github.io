@@ -1,0 +1,759 @@
+<title>mark-comms</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script defer src="https://cloud.umami.is/script.js" data-website-id="0cbf64bd-f94b-48ab-be6e-217d9674e4f6"></script>
+<style>
+/* Layout: a toolbar over two panes. Left pane is the rendered draft, right pane is the comment rail.
+   Under 960px the rail becomes a bottom sheet. Neutral cool greys with one signal-orange accent. */
+:root {
+  --bg: #e4e7e9;
+  --paper: #f8f9f9;
+  --ink: #15181a;
+  --muted: #5a6369;
+  --line: #c8ced2;
+  --accent: #e8450c;
+  --accent-ink: #ffffff;
+  --hl: rgba(232, 69, 12, 0.18);
+  --hl-deep: rgba(232, 69, 12, 0.34);
+  --hl-done: rgba(90, 99, 105, 0.16);
+  --ok: #1d7a46;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "IBM Plex Serif", Charter, "Iowan Old Style", Georgia, serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111314; --paper: #1b1e20; --ink: #e7eaeb; --muted: #98a1a7; --line: #33393d;
+    --accent: #ff6a2b; --accent-ink: #160a04;
+    --hl: rgba(255, 106, 43, 0.22); --hl-deep: rgba(255, 106, 43, 0.42); --hl-done: rgba(152, 161, 167, 0.18);
+    --ok: #4cc38a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111314; --paper: #1b1e20; --ink: #e7eaeb; --muted: #98a1a7; --line: #33393d;
+  --accent: #ff6a2b; --accent-ink: #160a04;
+  --hl: rgba(255, 106, 43, 0.22); --hl-deep: rgba(255, 106, 43, 0.42); --hl-done: rgba(152, 161, 167, 0.18);
+  --ok: #4cc38a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); overflow: hidden; }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+
+/* toolbar */
+header { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--paper); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { font: 500 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#fname { font: 500 13px var(--mono); max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#dirty { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.sp { flex: 1 1 8px; }
+.btn { white-space: nowrap; border: 1px solid var(--line); background: transparent; border-radius: 6px; padding: 6px 12px; cursor: pointer; min-height: 34px; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.small { padding: 2px 8px; min-height: 26px; font: 500 11px var(--mono); letter-spacing: 0.02em; }
+.btn.link { border: 0; padding: 2px 4px; min-height: 0; color: var(--muted); font: 500 11px var(--mono); }
+.btn.link:hover { color: var(--ink); text-decoration: underline; }
+#railToggle { display: none; }
+details.more { position: relative; }
+details.more summary { list-style: none; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 230px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+.menu label { font: 500 11px var(--mono); color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.menu .note { margin: 0; font: 11px/1.4 var(--mono); color: var(--muted); }
+.menu input[type=text] { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 6px 8px; }
+
+/* panes */
+main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; }
+#docpane { overflow: auto; padding: 24px 16px 96px; -webkit-overflow-scrolling: touch; }
+#doc { max-width: 70ch; margin: 0 auto; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 32px clamp(16px, 5vw, 48px); font: 17px/1.7 var(--serif); overflow-wrap: anywhere; }
+#doc h1, #doc h2, #doc h3, #doc h4, #doc h5, #doc h6 { font-family: var(--sans); line-height: 1.25; margin: 1.6em 0 0.5em; text-wrap: balance; }
+#doc h1 { font-size: 1.7em; margin-top: 0; } #doc h2 { font-size: 1.35em; } #doc h3 { font-size: 1.15em; } #doc h4, #doc h5, #doc h6 { font-size: 1em; }
+#doc p { margin: 0 0 1em; }
+#doc ul, #doc ol { margin: 0 0 1em; padding-left: 1.5em; }
+#doc li > p { margin: 0; }
+#doc li { margin: 0.25em 0; }
+#doc blockquote { margin: 0 0 1em; padding-left: 1em; border-left: 3px solid var(--line); color: var(--muted); }
+#doc hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+#doc code { font: 0.86em var(--mono); background: var(--bg); padding: 0.1em 0.35em; border-radius: 4px; }
+#doc pre { margin: 0 0 1em; background: var(--bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; }
+#doc pre code { background: none; padding: 0; font-size: 0.82em; line-height: 1.55; }
+#doc a { color: var(--accent); text-underline-offset: 2px; }
+#doc .tw { overflow-x: auto; margin: 0 0 1em; }
+#doc table { border-collapse: collapse; font: 15px/1.5 var(--sans); }
+#doc th, #doc td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+#doc th { background: var(--bg); }
+mark.hl { background: var(--hl); color: inherit; border-bottom: 2px solid var(--accent); border-radius: 2px; cursor: pointer; }
+mark.hl[data-d="2"], mark.hl[data-d="3"] { background: var(--hl-deep); }
+mark.hl.r { background: var(--hl-done); border-bottom: 2px dashed var(--muted); }
+mark.hl.p { background: var(--hl-deep); border-bottom-style: dotted; }
+mark.hl.active { background: var(--hl-deep); outline: 2px solid var(--accent); outline-offset: 1px; }
+.pulse { animation: pulse 1s ease-out; }
+@keyframes pulse { from { box-shadow: 0 0 0 0 var(--accent); } to { box-shadow: 0 0 0 10px transparent; } }
+
+#rail { border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+#railhead { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); font: 500 12px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+#railhead label { display: flex; align-items: center; gap: 6px; text-transform: none; cursor: pointer; }
+#cards { overflow: auto; padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
+.empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.card.resolved { opacity: 0.62; }
+.card.resolved:hover, .card.resolved.active { opacity: 1; }
+.quote { margin: 0; padding-left: 10px; border-left: 3px solid var(--accent); color: var(--muted); font: 13px/1.45 var(--serif); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.card.resolved .quote { border-left-color: var(--muted); }
+.tag { font: 500 10px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--muted); }
+.tag.warn { color: var(--accent); border-color: var(--accent); }
+.tag.ok { color: var(--ok); border-color: var(--ok); }
+.meta { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font: 11px var(--mono); color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 500; }
+.body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.msg { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.replies { display: flex; flex-direction: column; gap: 10px; padding-left: 12px; border-left: 1px solid var(--line); }
+.acts { display: flex; gap: 4px; flex-wrap: wrap; }
+textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 8px 10px; }
+.form { display: flex; flex-direction: column; gap: 8px; }
+.form .row { display: flex; gap: 8px; align-items: center; }
+.form .hint { font: 11px var(--mono); color: var(--muted); margin-left: auto; }
+
+#fab { position: fixed; z-index: 40; display: none; }
+#fab.on { display: block; }
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font: 500 12px var(--mono); z-index: 60; max-width: calc(100vw - 32px); opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+#toast.on { opacity: 1; }
+dialog { background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 16px; width: min(640px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,0.45); }
+dialog form { display: flex; flex-direction: column; gap: 10px; }
+dialog textarea { min-height: 260px; font: 13px/1.5 var(--mono); }
+dialog input[type=text] { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 6px 8px; }
+
+@media (max-width: 959px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  #railToggle { display: inline-block; }
+  #rail { position: fixed; left: 0; right: 0; bottom: 0; height: 52vh; z-index: 35; border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(0,0,0,0.2); transform: translateY(105%); transition: transform 0.18s; }
+  #app.rail-open #rail { transform: none; }
+  #app.rail-open #docpane { padding-bottom: 56vh; }
+}
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } #rail { transition: none; } }
+</style>
+
+<div id="app">
+  <header>
+    <span class="brand">mark-comms</span>
+    <span id="fname"></span><span id="dirty" hidden title="Unsaved changes"></span>
+    <span class="sp"></span>
+    <button class="btn" id="openBtn" type="button">Open</button>
+    <button class="btn" id="saveBtn" type="button">Save</button>
+    <button class="btn" id="copyBtn" type="button">Copy .md</button>
+    <button class="btn primary" id="commentBtn" type="button">Comment</button>
+    <button class="btn" id="railToggle" type="button">Notes</button>
+    <details class="more" id="more">
+      <summary class="btn">More</summary>
+      <div class="menu">
+        <button class="btn" id="pasteBtn" type="button">New from pasted text</button>
+        <label>Your name on comments<input type="text" id="author" maxlength="40"></label>
+        <button class="btn" id="resetBtn" type="button">Discard draft, load example</button>
+        <p class="note">Your draft stays in this browser. Umami counts page loads only: no cookies, no content.</p>
+      </div>
+    </details>
+  </header>
+  <main>
+    <div id="docpane"><article id="doc" aria-label="Document"></article></div>
+    <aside id="rail" aria-label="Comments">
+      <div id="railhead"><span id="count">Comments</span><span class="sp"></span><label><input type="checkbox" id="showResolved" checked> Show resolved</label></div>
+      <div id="cards"></div>
+    </aside>
+  </main>
+</div>
+<button class="btn primary" id="fab" type="button">Comment</button>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+<dialog id="pasteDlg">
+  <form method="dialog" id="pasteForm">
+    <label class="menu" style="display:contents"><span style="font:500 11px var(--mono);color:var(--muted)">File name</span><input type="text" id="pasteName" value="pasted.md"></label>
+    <textarea id="pasteText" placeholder="Paste markdown here. Files commented in the old Sidemarkr open too and are saved in the new format."></textarea>
+    <div class="row" style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" type="button" id="pasteCancel">Cancel</button>
+      <button class="btn primary" type="submit">Load</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+/* ============ small helpers ============ */
+const $ = (s) => document.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+}
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 2600); }
+
+/* ============ markdown -> DOM, with a source map ============
+   Every rendered text node is a verbatim slice of the markdown source, so a
+   selection in the page maps back to exact source positions (needed to write
+   the [text](markcomms:ID) anchors back into the file; the loader also reads legacy sidemarkr: tags). */
+const info = new WeakMap();      // text node -> {s: source start, c: inline container id}
+let constructs = [];             // inline spans in source: {a,b,ca,cb,kind}
+let ctxN = 0;
+
+function sepNode() { return document.createTextNode("\n"); }
+function addText(parent, str, map, a, b, ctx) {
+  let i = a;
+  while (i < b) {
+    let j = i + 1;
+    while (j < b && map[j] === map[j - 1] + 1) j++;
+    const n = document.createTextNode(str.slice(i, j));
+    info.set(n, { s: map[i], c: ctx });
+    parent.appendChild(n);
+    i = j;
+  }
+}
+function skipCode(str, i, to) { // at a backtick run: return index after the code span (or after the run)
+  let r = i; while (r < to && str[r] === "`") r++;
+  const run = str.slice(i, r);
+  const end = str.indexOf(run, r);
+  return end >= 0 && end + run.length <= to ? end + run.length : r;
+}
+function findClose(str, from, to, d, n) {
+  for (let i = from; i <= to - n; i++) {
+    const c = str[i];
+    if (c === "\\") { i++; continue; }
+    if (c === "`") { i = skipCode(str, i, to) - 1; continue; }
+    if (c !== d) continue;
+    let r = i; while (r < to && str[r] === d) r++;
+    if (r - i !== n) { i = r - 1; continue; }
+    if (i === from || /\s/.test(str[i - 1])) { i = r - 1; continue; }
+    if (d === "_" && /[A-Za-z0-9]/.test(str[r] || "")) { i = r - 1; continue; }
+    return i;
+  }
+  return -1;
+}
+function matchBracket(str, i, to) { // str[i] === "[" -> index of matching "]" or -1
+  let depth = 0;
+  for (let k = i; k < to; k++) {
+    const c = str[k];
+    if (c === "\\") { k++; continue; }
+    if (c === "`") { k = skipCode(str, k, to) - 1; continue; }
+    if (c === "[") depth++;
+    else if (c === "]") { depth--; if (depth === 0) return k; }
+  }
+  return -1;
+}
+function matchParen(str, i, to) {
+  let depth = 0;
+  for (let k = i; k < to; k++) {
+    const c = str[k];
+    if (c === "\\") { k++; continue; }
+    if (c === "(") depth++;
+    else if (c === ")") { depth--; if (depth === 0) return k; }
+  }
+  return -1;
+}
+const SAFE_HREF = /^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i;
+function inlineRange(parent, str, map, from, to, ctx) {
+  let i = from, plain = from;
+  const flush = (upto) => { if (upto > plain) addText(parent, str, map, plain, upto, ctx); };
+  while (i < to) {
+    const c = str[i];
+    if (c === "\\" && i + 1 < to && /[!-\/:-@\[-`{-~]/.test(str[i + 1])) {
+      flush(i); addText(parent, str, map, i + 1, i + 2, ctx); i += 2; plain = i; continue;
+    }
+    if (c === "`") {
+      let r = i; while (r < to && str[r] === "`") r++;
+      const run = str.slice(i, r), end = str.indexOf(run, r);
+      if (end >= 0 && end + run.length <= to) {
+        flush(i);
+        let a = r, b = end;
+        if (str[a] === " " && str[b - 1] === " " && b - a > 2) { a++; b--; }
+        const code = h("code"); addText(code, str, map, a, b, ctx); parent.appendChild(code);
+        constructs.push({ a: map[i], b: map[end + run.length - 1] + 1, ca: map[a], cb: map[b - 1] + 1, kind: "code" });
+        i = end + run.length; plain = i; continue;
+      }
+      i = r; continue;
+    }
+    if (c === "[") {
+      const cb = matchBracket(str, i, to);
+      if (cb > 0 && str[cb + 1] === "(") {
+        const cp = matchParen(str, cb + 1, to);
+        if (cp > 0) {
+          const dest = str.slice(cb + 2, cp).trim().replace(/^<|>$/g, "").split(/\s+/)[0] || "";
+          flush(i);
+          const a = h("a"); if (SAFE_HREF.test(dest)) { a.href = dest; a.target = "_blank"; a.rel = "noopener noreferrer"; }
+          inlineRange(a, str, map, i + 1, cb, ctx); parent.appendChild(a);
+          constructs.push({ a: map[i], b: map[cp] + 1, ca: map[i + 1], cb: map[cb], kind: "link" });
+          i = cp + 1; plain = i; continue;
+        }
+      }
+      i++; continue;
+    }
+    if (c === "<") {
+      const m = /^<(https?:\/\/[^\s>]+)>/.exec(str.slice(i, to));
+      if (m) {
+        flush(i); const a = h("a", { href: m[1], target: "_blank", rel: "noopener noreferrer" });
+        addText(a, str, map, i + 1, i + 1 + m[1].length, ctx); parent.appendChild(a);
+        constructs.push({ a: map[i], b: map[i + m[0].length - 1] + 1, ca: map[i + 1], cb: map[i + m[0].length - 1], kind: "link" });
+        i += m[0].length; plain = i; continue;
+      }
+      i++; continue;
+    }
+    if (c === "*" || c === "_" || c === "~") {
+      let r = i; while (r < to && str[r] === c) r++;
+      let n = r - i;
+      const okOpen = c === "~" ? n === 2 : n <= 3;
+      if (okOpen && r < to && !/\s/.test(str[r]) && !(c === "_" && i > from && /[A-Za-z0-9]/.test(str[i - 1]))) {
+        const close = findClose(str, r, to, c, n);
+        if (close > r) {
+          flush(i);
+          let node = parent;
+          const els = c === "~" ? ["del"] : n === 1 ? ["em"] : n === 2 ? ["strong"] : ["em", "strong"];
+          for (const t of els) { const e = h(t); node.appendChild(e); node = e; }
+          inlineRange(node, str, map, r, close, ctx);
+          constructs.push({ a: map[i], b: map[close + n - 1] + 1, ca: map[r], cb: map[close], kind: "em" });
+          i = close + n; plain = i; continue;
+        }
+      }
+      i = r; continue;
+    }
+    i++;
+  }
+  flush(to);
+}
+function inlineLines(parent, lines) {
+  const ctx = ++ctxN; let str = "", map = [];
+  lines.forEach((ln, k) => {
+    for (let x = 0; x < ln.t.length; x++) map.push(ln.s + x);
+    str += ln.t;
+    if (k < lines.length - 1) { str += "\n"; map.push(ln.s + ln.t.length); }
+  });
+  inlineRange(parent, str, map, 0, str.length, ctx);
+}
+
+const RE_FENCE = /^ {0,3}(`{3,}|~{3,})\s*(.*)$/;
+const RE_HEAD = /^( {0,3}#{1,6}[ \t]+)(.*?)(?:[ \t]+#+[ \t]*)?$/;
+const RE_HR = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+const RE_LIST = /^( {0,3})([-*+]|\d{1,9}[.)])(?:([ \t]+)(.*))?$/;
+const RE_QUOTE = /^ {0,3}>/;
+const RE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const blank = (t) => /^\s*$/.test(t);
+function startsBlock(t) { return RE_FENCE.test(t) || RE_HEAD.test(t) || RE_HR.test(t) || RE_QUOTE.test(t) || (RE_LIST.test(t) && RE_LIST.exec(t)[4] !== undefined) || /^\s*<!--/.test(t); }
+function splitCells(t, s) {
+  const cells = []; let st = 0;
+  const pushCell = (a, b) => { let x = a, y = b; while (x < y && /\s/.test(t[x])) x++; while (y > x && /\s/.test(t[y - 1])) y--; cells.push({ t: t.slice(x, y), s: s + x }); };
+  let a = 0, b = t.length;
+  if (/^\s*\|/.test(t)) a = t.indexOf("|") + 1;
+  if (/\|\s*$/.test(t) && t.lastIndexOf("|") >= a) b = t.lastIndexOf("|");
+  st = a;
+  for (let k = a; k < b; k++) { if (t[k] === "\\") { k++; continue; } if (t[k] === "|") { pushCell(st, k); st = k + 1; } }
+  pushCell(st, b);
+  return cells;
+}
+function parseBlocks(L, parent) {
+  let i = 0;
+  const add = (el) => { parent.appendChild(el); parent.appendChild(sepNode()); };
+  while (i < L.length) {
+    const ln = L[i], t = ln.t;
+    if (blank(t)) { i++; continue; }
+    if (/^\s*<!--/.test(t)) { while (i < L.length && !/-->/.test(L[i].t)) i++; i++; continue; }
+    let m = RE_FENCE.exec(t);
+    if (m) {
+      const f = m[1]; const close = new RegExp("^ {0,3}" + (f[0] === "`" ? "`" : "~") + "{" + f.length + ",}\\s*$");
+      let j = i + 1; const body = [];
+      while (j < L.length && !close.test(L[j].t)) { body.push(L[j]); j++; }
+      const code = h("code"), ctx = ++ctxN;
+      body.forEach((b) => { if (b.t) { const n = document.createTextNode(b.t); info.set(n, { s: b.s, c: ctx }); code.appendChild(n); } const nl = document.createTextNode("\n"); info.set(nl, { s: b.s + b.t.length, c: ctx }); code.appendChild(nl); });
+      if (body.length) constructs.push({ a: body[0].s, b: body[body.length - 1].s + body[body.length - 1].t.length, ca: body[0].s, cb: body[body.length - 1].s + body[body.length - 1].t.length, kind: "code" });
+      add(h("pre", {}, code)); i = j + 1; continue;
+    }
+    m = RE_HEAD.exec(t);
+    if (m && m[2].length) { const lvl = m[1].trim().length; const el = h("h" + lvl); inlineLines(el, [{ t: m[2], s: ln.s + m[1].length }]); add(el); i++; continue; }
+    if (RE_HR.test(t)) { add(h("hr")); i++; continue; }
+    if (RE_QUOTE.test(t)) {
+      const q = [];
+      while (i < L.length && RE_QUOTE.test(L[i].t)) { const p = /^( {0,3}> ?)/.exec(L[i].t)[1].length; q.push({ t: L[i].t.slice(p), s: L[i].s + p }); i++; }
+      const bq = h("blockquote"); parseBlocks(q, bq); add(bq); continue;
+    }
+    m = RE_LIST.exec(t);
+    if (m && m[4] !== undefined) {
+      const ordered = /\d/.test(m[2][0]);
+      const list = h(ordered ? "ol" : "ul"); if (ordered && parseInt(m[2], 10) !== 1) list.start = parseInt(m[2], 10);
+      while (i < L.length) {
+        const mm = RE_LIST.exec(L[i].t);
+        if (!mm || mm[4] === undefined || /\d/.test(mm[2][0]) !== ordered || RE_HR.test(L[i].t)) break;
+        const ci = mm[1].length + mm[2].length + Math.min(Math.max((mm[3] || " ").length, 1), 4);
+        const item = [{ t: mm[4], s: L[i].s + L[i].t.length - mm[4].length }];
+        let j = i + 1;
+        while (j < L.length) {
+          const lt = L[j].t;
+          if (blank(lt)) { let k = j; while (k < L.length && blank(L[k].t)) k++; if (k < L.length && /^ */.exec(L[k].t)[0].length >= ci) { for (; j < k; j++) item.push({ t: "", s: L[j].s }); continue; } break; }
+          const ind = /^ */.exec(lt)[0].length;
+          if (ind >= ci) { item.push({ t: lt.slice(ci), s: L[j].s + ci }); j++; continue; }
+          const prev = item[item.length - 1];
+          if (RE_LIST.test(lt) || startsBlock(lt) || blank(prev.t)) break;
+          item.push({ t: lt, s: L[j].s }); j++;
+        }
+        const li = h("li"); parseBlocks(item, li); list.appendChild(li); list.appendChild(sepNode());
+        i = j;
+        let k = i; while (k < L.length && blank(L[k].t)) k++;
+        const nx = k < L.length ? RE_LIST.exec(L[k].t) : null;
+        if (nx && nx[4] !== undefined && /\d/.test(nx[2][0]) === ordered) i = k; else break;
+      }
+      add(list); continue;
+    }
+    if (t.includes("|") && i + 1 < L.length && RE_SEP.test(L[i + 1].t) && L[i + 1].t.includes("-")) {
+      const table = h("table"), thead = h("thead"), tbody = h("tbody");
+      const row = (r, tag) => { const tr = h("tr"); for (const c of splitCells(r.t, r.s)) { const cell = h(tag); inlineLines(cell, [c]); tr.appendChild(cell); tr.appendChild(sepNode()); } return tr; };
+      thead.appendChild(row(L[i], "th")); i += 2;
+      while (i < L.length && !blank(L[i].t) && L[i].t.includes("|")) { tbody.appendChild(row(L[i], "td")); i++; }
+      table.append(thead, tbody); const wrap = h("div", { class: "tw" }, table); add(wrap); continue;
+    }
+    const para = [];
+    while (i < L.length && !blank(L[i].t) && (para.length === 0 || !startsBlock(L[i].t))) { para.push(L[i]); i++; }
+    const p = h("p"); inlineLines(p, para); add(p);
+  }
+}
+function renderMarkdown(src, root) {
+  constructs = []; ctxN = 0; root.textContent = "";
+  const L = []; let p = 0;
+  for (const t of src.split("\n")) { L.push({ t, s: p }); p += t.length + 1; }
+  parseBlocks(L, root);
+}
+
+/* ============ document index: text <-> source <-> comments ============ */
+let docText = "", srcMap = new Int32Array(0), ctxMap = new Int32Array(0), norm = { out: "", map: [] };
+function normalize(s) {
+  let out = "", map = [], prevSpace = false;
+  for (let i = 0; i < s.length; i++) {
+    if (/\s/.test(s[i])) { if (!prevSpace && out.length) { out += " "; map.push(i); } prevSpace = true; }
+    else { out += s[i]; map.push(i); prevSpace = false; }
+  }
+  return { out, map };
+}
+function textNodes() { const w = document.createTreeWalker($("#doc"), NodeFilter.SHOW_TEXT); const a = []; let n; while ((n = w.nextNode())) a.push(n); return a; }
+function indexDoc() {
+  const nodes = textNodes(); let total = 0; for (const n of nodes) total += n.data.length;
+  srcMap = new Int32Array(total).fill(-1); ctxMap = new Int32Array(total).fill(-2);
+  let off = 0, parts = [];
+  for (const n of nodes) {
+    const inf = info.get(n);
+    for (let k = 0; k < n.data.length; k++) if (inf) { srcMap[off + k] = inf.s + k; ctxMap[off + k] = inf.c; }
+    parts.push(n.data); off += n.data.length;
+  }
+  docText = parts.join(""); norm = normalize(docText);
+}
+function findRange(sel, hint) {
+  const ns = normalize(sel).out.trim(); if (!ns) return null;
+  let best = -1, bd = Infinity, pos = norm.out.indexOf(ns);
+  while (pos >= 0) { const d = Math.abs(norm.map[pos] - hint); if (d < bd) { bd = d; best = pos; } pos = norm.out.indexOf(ns, pos + 1); }
+  if (best < 0) return null;
+  return { ds: norm.map[best], de: norm.map[best + ns.length - 1] + 1 };
+}
+
+/* ============ state, load, serialize ============ */
+const st = { name: "untitled.md", handle: null, source: "", comments: [], active: null, pending: null, replyTo: null, editing: null, dirty: false, showResolved: true, author: store("markcomms.author") || "Me", cap: null, capAt: 0 };
+const roots = () => st.comments.filter((c) => !c.parentId);
+const kids = (id) => st.comments.filter((c) => c.parentId === id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+function stripAnchors(body, metas) {
+  const byId = new Map(metas.map((m) => [m.id, m]));
+  const closer = new RegExp("\\]\\((?:sidemarkr|markcomms):("  + UUID + ")\\)", "g");
+  let guard = 0;
+  while (guard++ < 5000) {
+    closer.lastIndex = 0; const m = closer.exec(body); if (!m) break;   // first remaining closer = innermost-first
+    const c = m.index, id = m[1], sel = byId.get(id)?.selectedText;
+    let open = -1;
+    if (sel && body.slice(c - sel.length - 1, c) === "[" + sel) open = c - sel.length - 1;
+    if (open < 0) { let depth = 1; for (let k = c - 1; k >= 0; k--) { if (body[k] === "]") depth++; else if (body[k] === "[") { depth--; if (depth === 0) { open = k; break; } } } }
+    if (open < 0) { body = body.slice(0, c) + body.slice(c + m[0].length); continue; }
+    body = body.slice(0, open) + body.slice(open + 1, c) + body.slice(c + m[0].length);
+  }
+  return body;
+}
+function parseCommentsSection(text) {
+  const metas = [], blocks = text.split(/^\[\^\d+\]:[ \t]*$/m).slice(1);
+  for (const blk of blocks) {
+    const lines = blk.replace(/^\n/, "").split("\n").map((l) => l.replace(/^ {1,4}/, ""));
+    const metaLine = lines.find((l) => /^<!-- (?:sidemarkr|markcomms): /.test(l)); if (!metaLine) continue;
+    let meta; try { meta = JSON.parse(metaLine.replace(/^<!-- (?:sidemarkr|markcomms): /, "").replace(/ -->\s*$/, "")); } catch (e) { continue; }
+    let k = lines.findIndex((l) => /^\*\*[^*].*?:\*\*(\s|$)/.test(l) && !/^\*\*(💬|↩️)/.test(l));
+    let author = "Anonymous", body = "";
+    if (k >= 0) { const mm = /^\*\*(.+?):\*\*\s?(.*)$/.exec(lines[k]); author = mm[1]; body = [mm[2], ...lines.slice(k + 1)].join("\n").replace(/\s+$/, ""); }
+    metas.push({ ...meta, author, body });
+  }
+  return metas;
+}
+function load(name, text, handle) {
+  text = text.replace(/\r\n?/g, "\n");
+  const secRe = /\n*(?:---\n+)?## 💬 Comments[^\n]*\n/g; let sec = null, mm;
+  while ((mm = secRe.exec(text))) sec = mm;
+  let body = text, metas = [];
+  if (sec) { body = text.slice(0, sec.index); metas = parseCommentsSection(text.slice(sec.index + sec[0].length)); }
+  body = body.replace(/\n*---\s*$/, (x) => (sec ? "" : x));
+  st.name = name; st.handle = handle || null; st.source = stripAnchors(body.replace(/\s+$/, ""), metas) + "\n";
+  st.comments = metas.map((m) => ({ id: m.id, parentId: m.parentId ?? null, selectedText: m.selectedText || "", createdAt: m.createdAt || new Date().toISOString(), resolved: !!m.resolved, orphaned: !!m.orphaned, offset: m.offset || 0, length: m.length || 0, author: m.author, body: m.body, ds: null, de: null }));
+  st.active = st.pending = st.replyTo = st.editing = null; st.dirty = false;
+  renderDoc(); resolveAll(); paint(); renderRail(); renderHead(); persist();
+}
+function resolveAll() {
+  for (const c of st.comments) {
+    if (c.parentId) continue;
+    const r = findRange(c.selectedText, c.offset);
+    if (r) { c.ds = r.ds; c.de = r.de; c.orphaned = false; c.offset = r.ds; c.length = r.de - r.ds; } else { c.ds = c.de = null; c.orphaned = true; }
+  }
+}
+const srcRange = (c) => (c.ds == null ? null : { a: srcMap[c.ds], b: srcMap[c.de - 1] + 1 });
+function anchorOk(c) {
+  if (c.ds == null) return null;
+  for (let k = c.ds; k < c.de; k++) if (srcMap[k] < 0 || ctxMap[k] !== ctxMap[c.ds]) return null;
+  const a = srcMap[c.ds], b = srcMap[c.de - 1] + 1;
+  for (const k of constructs) {
+    if (!(k.a < b && a < k.b)) continue;
+    if (a <= k.a && k.b <= b) continue;
+    if (k.kind !== "code" && k.ca <= a && b <= k.cb) continue;
+    return null;
+  }
+  return { a, b };
+}
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function serialize() {
+  let body = st.source.replace(/\s+$/, "");
+  const tops = roots();
+  if (!tops.length) return body + "\n";
+  const anchors = []; let skipped = 0;
+  for (const c of tops.slice().sort((x, y) => x.createdAt.localeCompare(y.createdAt))) { const r = anchorOk(c); if (r) anchors.push({ id: c.id, ...r }); else skipped++; }
+  anchors.sort((x, y) => x.a - y.a || y.b - x.b);
+  const keep = [], stack = [];
+  for (const an of anchors) {
+    while (stack.length && stack[stack.length - 1].b <= an.a) stack.pop();
+    if (stack.length && an.b > stack[stack.length - 1].b) { skipped++; continue; }
+    stack.push(an); keep.push(an);
+  }
+  const ev = new Map(); const at = (p) => { if (!ev.has(p)) ev.set(p, { open: [], close: [] }); return ev.get(p); };
+  keep.forEach((an, idx) => { at(an.a).open.push({ ...an, idx }); at(an.b).close.push({ ...an, idx }); });
+  let out = "", last = 0;
+  for (const p of [...ev.keys()].sort((x, y) => x - y)) {
+    out += body.slice(last, p); last = p; const e = ev.get(p);
+    e.close.sort((x, y) => y.idx - x.idx).forEach((an) => { out += "](markcomms:" + an.id + ")"; });
+    e.open.sort((x, y) => x.idx - y.idx).forEach(() => { out += "["; });
+  }
+  out += body.slice(last);
+  const ordered = st.comments.slice().sort((x, y) => x.createdAt.localeCompare(y.createdAt));
+  const notes = ordered.map((c, i) => {
+    const top = c.parentId ? st.comments.find((x) => x.id === c.parentId) : c;
+    const meta = JSON.stringify({ id: c.id, parentId: c.parentId, selectedText: top ? top.selectedText : c.selectedText, createdAt: c.createdAt, resolved: !!(top && top.resolved), orphaned: !!(top && top.ds == null), offset: top && top.ds != null ? top.ds : c.offset, length: top && top.ds != null ? top.de - top.ds : c.length }).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+    const bodyLines = String(c.body).split("\n"); const first = bodyLines.shift();
+    const lines = ["<!-- markcomms: " + meta + " -->", c.parentId ? "**↩️ Reply**" : "**💬 Comment**", "ID: markcomms:" + c.id, "Created: " + c.createdAt];
+    if (c.parentId) lines.push("Reply to: markcomms:" + c.parentId);
+    if (top && top.resolved) lines.push("Status: resolved");
+    lines.push("_Selected text: \"" + esc(top ? top.selectedText : c.selectedText) + "\"_", "**" + c.author + ":** " + first, ...bodyLines.map((l) => (l.length ? l : "")));
+    return "[^" + (i + 1) + "]:\n" + lines.map((l) => "    " + l).join("\n");
+  });
+  serialize.skipped = skipped;
+  return out + "\n\n---\n\n## 💬 Comments\n\n" + notes.join("\n\n") + "\n";
+}
+
+/* ============ rendering ============ */
+function renderDoc() { renderMarkdown(st.source, $("#doc")); indexDoc(); }
+function paint() {
+  const doc = $("#doc"); renderMarkdown(st.source, doc); indexDoc();
+  const ranges = [];
+  for (const c of roots()) if (c.ds != null && (st.showResolved || !c.resolved)) ranges.push({ id: c.id, s: c.ds, e: c.de, cls: c.resolved ? "r" : "" });
+  if (st.pending) ranges.push({ id: "pending", s: st.pending.ds, e: st.pending.de, cls: "p" });
+  if (!ranges.length) return;
+  let off = 0;
+  for (const n of textNodes()) {
+    const ns = off, ne = off + n.data.length; off = ne;
+    const hit = ranges.filter((r) => r.s < ne && r.e > ns); if (!hit.length) continue;
+    const cuts = new Set([ns, ne]); hit.forEach((r) => { if (r.s > ns) cuts.add(r.s); if (r.e < ne) cuts.add(r.e); });
+    const pts = [...cuts].sort((a, b) => a - b), inf = info.get(n), frag = document.createDocumentFragment();
+    for (let k = 0; k + 1 < pts.length; k++) {
+      const p = pts[k], q = pts[k + 1], tn = document.createTextNode(n.data.slice(p - ns, q - ns));
+      if (inf) info.set(tn, { s: inf.s + (p - ns), c: inf.c });
+      const cov = hit.filter((r) => r.s <= p && r.e >= q);
+      if (!cov.length) { frag.appendChild(tn); continue; }
+      const mk = h("mark", { class: "hl" + (cov.every((r) => r.cls === "r") ? " r" : "") + (cov.some((r) => r.cls === "p") ? " p" : "") + (cov.some((r) => r.id === st.active) ? " active" : ""), "data-ids": cov.sort((x, y) => (x.e - x.s) - (y.e - y.s)).map((r) => r.id).join(" "), "data-d": Math.min(cov.length, 3) });
+      mk.appendChild(tn); frag.appendChild(mk);
+    }
+    n.replaceWith(frag);
+  }
+}
+function when(iso) { try { return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); } catch (e) { return iso; } }
+function form(initial, label, onSave, onCancel) {
+  const ta = h("textarea", { id: "ta-" + uid().slice(0, 6), "aria-label": label, placeholder: label }); ta.value = initial || "";
+  const save = () => { const v = ta.value.trim(); if (v) onSave(v); };
+  ta.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); save(); } else if (e.key === "Escape") onCancel(); });
+  setTimeout(() => ta.focus({ preventScroll: false }), 0);
+  return h("div", { class: "form" }, ta, h("div", { class: "row" }, h("button", { class: "btn small primary", type: "button", onclick: save }, "Save"), h("button", { class: "btn small", type: "button", onclick: onCancel }, "Cancel"), h("span", { class: "hint" }, "Cmd+Enter saves")));
+}
+let delArm = null, delTimer;
+function delBtn(c) {
+  const armed = delArm === c.id;
+  return h("button", { class: "btn link", type: "button", onclick: () => {
+    if (!armed) { delArm = c.id; clearTimeout(delTimer); delTimer = setTimeout(() => { delArm = null; renderRail(); }, 3000); renderRail(); return; }
+    st.comments = st.comments.filter((x) => x.id !== c.id && x.parentId !== c.id); delArm = null; touch(); paint(); renderRail();
+  } }, armed ? "Confirm delete" : "Delete");
+}
+function msg(c, top) {
+  if (st.editing === c.id) return form(c.body, "Edit comment", (v) => { c.body = v; st.editing = null; touch(); renderRail(); }, () => { st.editing = null; renderRail(); });
+  const acts = h("div", { class: "acts" });
+  if (top) { acts.append(h("button", { class: "btn link", type: "button", onclick: () => { st.replyTo = c.id; renderRail(); } }, "Reply"), h("button", { class: "btn link", type: "button", onclick: () => { c.resolved = !c.resolved; touch(); paint(); renderRail(); } }, c.resolved ? "Reopen" : "Resolve")); }
+  acts.append(h("button", { class: "btn link", type: "button", onclick: () => { st.editing = c.id; renderRail(); } }, "Edit"), delBtn(c));
+  return h("div", { class: "msg" }, h("div", { class: "meta" }, h("b", {}, c.author), when(c.createdAt), top && c.resolved ? h("span", { class: "tag ok" }, "resolved") : null, top && c.orphaned ? h("span", { class: "tag warn" }, "text not found") : null), h("p", { class: "body" }, c.body), acts);
+}
+function renderRail() {
+  const box = $("#cards"); box.textContent = "";
+  const tops = roots().slice().sort((a, b) => (a.ds == null) - (b.ds == null) || (a.ds ?? 0) - (b.ds ?? 0) || a.createdAt.localeCompare(b.createdAt));
+  const open = tops.filter((c) => !c.resolved).length;
+  $("#count").textContent = tops.length ? tops.length + " comments, " + open + " open" : "Comments";
+  $("#railToggle").textContent = "Notes (" + tops.length + ")";
+  if (st.pending) {
+    box.append(h("div", { class: "card active" }, h("blockquote", { class: "quote" }, st.pending.text), form("", "Add a comment", (v) => {
+      const p = st.pending; const c = { id: uid(), parentId: null, selectedText: p.text, createdAt: new Date().toISOString(), resolved: false, orphaned: false, offset: p.ds, length: p.de - p.ds, author: st.author, body: v, ds: p.ds, de: p.de };
+      st.comments.push(c); st.pending = null; st.active = c.id; touch(); paint(); renderRail();
+    }, () => { st.pending = null; paint(); renderRail(); })));
+  }
+  if (!tops.length && !st.pending) box.append(h("p", { class: "empty" }, "Select text in the draft, then tap Comment. Comments save into the .md file as footnotes, so Claude can read them when you drop the file in."));
+  for (const c of tops) {
+    if (c.resolved && !st.showResolved) continue;
+    const card = h("article", { class: "card" + (st.active === c.id ? " active" : "") + (c.resolved ? " resolved" : ""), "data-id": c.id },
+      h("blockquote", { class: "quote", onclick: () => focusComment(c.id, true) }, c.selectedText), msg(c, true));
+    const rs = kids(c.id);
+    if (rs.length) card.append(h("div", { class: "replies" }, rs.map((r) => msg(r, false))));
+    if (st.replyTo === c.id) card.append(form("", "Write a reply", (v) => { st.comments.push({ id: uid(), parentId: c.id, selectedText: c.selectedText, createdAt: new Date().toISOString(), resolved: false, orphaned: false, offset: c.offset, length: c.length, author: st.author, body: v }); st.replyTo = null; touch(); renderRail(); }, () => { st.replyTo = null; renderRail(); }));
+    box.append(card);
+  }
+}
+function renderHead() { $("#fname").textContent = st.name; $("#dirty").hidden = !st.dirty; document.title = (st.dirty ? "• " : "") + st.name + " · mark-comms"; }
+function focusComment(id, scrollDoc) {
+  st.active = id; paint(); renderRail();
+  const mk = $('#doc mark[data-ids~="' + id + '"]');
+  if (mk && scrollDoc) { mk.scrollIntoView({ block: "center", behavior: "smooth" }); mk.classList.add("pulse"); setTimeout(() => mk.classList.remove("pulse"), 1000); }
+  const card = $('#cards [data-id="' + id + '"]'); if (card && !scrollDoc) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+/* ============ persistence ============ */
+let persistTimer;
+function persist() { clearTimeout(persistTimer); persistTimer = setTimeout(() => { try { store("markcomms.draft", JSON.stringify({ name: st.name, text: serialize(), dirty: st.dirty })); } catch (e) {} }, 300); }
+function touch() { st.dirty = true; renderHead(); persist(); }
+window.addEventListener("beforeunload", (e) => { if (st.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ============ selection -> comment ============ */
+function captureSelection() {
+  const sel = getSelection(); if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+  const r = sel.getRangeAt(0), doc = $("#doc");
+  if (!doc.contains(r.commonAncestorContainer)) return null;
+  let off = 0, lo = Infinity, hi = -1;
+  for (const n of textNodes()) {
+    const ns = off, len = n.data.length; off += len;
+    if (!r.intersectsNode(n)) continue;
+    const a = n === r.startContainer ? r.startOffset : 0, b = n === r.endContainer ? r.endOffset : len;
+    if (b <= a) continue;
+    lo = Math.min(lo, ns + a); hi = Math.max(hi, ns + b);
+  }
+  if (hi < 0) return null;
+  while (lo < hi && /\s/.test(docText[lo])) lo++; while (hi > lo && /\s/.test(docText[hi - 1])) hi--;
+  if (hi <= lo) return null;
+  return { ds: lo, de: hi, text: normalize(docText.slice(lo, hi)).out.trim(), rect: r.getBoundingClientRect() };
+}
+function positionFab(cap) {
+  const fab = $("#fab"); if (!cap) { fab.classList.remove("on"); return; }
+  const coarse = matchMedia("(pointer: coarse)").matches, w = 96, rr = cap.rect;
+  let top = rr.bottom + (coarse ? 38 : 8); if (top > innerHeight - 56) top = Math.max(8, rr.top - (coarse ? 90 : 46));
+  fab.style.top = top + "px"; fab.style.left = Math.min(Math.max(8, rr.left + rr.width / 2 - w / 2), innerWidth - w - 8) + "px"; fab.classList.add("on");
+}
+let selTimer;
+document.addEventListener("selectionchange", () => {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(() => { const cap = captureSelection(); if (cap) { st.cap = cap; st.capAt = Date.now(); } else if (Date.now() - st.capAt > 0) { st.capAt = st.capAt || Date.now(); } positionFab(cap); }, 80);
+});
+function startComment() {
+  const cap = st.cap && Date.now() - st.capAt < 5000 && captureSelection() || (st.cap && Date.now() - st.capAt < 5000 ? st.cap : null);
+  if (!cap) { toast("Select some text in the draft first"); return; }
+  st.pending = cap; st.cap = null; st.replyTo = st.editing = null; getSelection().removeAllRanges(); positionFab(null);
+  $("#app").classList.add("rail-open"); paint(); renderRail();
+}
+for (const id of ["#fab", "#commentBtn"]) { const b = $(id); b.addEventListener("pointerdown", (e) => e.preventDefault()); b.addEventListener("mousedown", (e) => e.preventDefault()); b.addEventListener("click", startComment); }
+$("#doc").addEventListener("click", (e) => {
+  const mk = e.target.closest("mark.hl"); if (!mk || (getSelection() && !getSelection().isCollapsed)) return;
+  const ids = mk.dataset.ids.split(" ").filter((x) => x !== "pending"); if (ids.length) { $("#app").classList.add("rail-open"); focusComment(ids[0], false); }
+});
+
+/* ============ files ============ */
+let guardAt = 0;
+function guard(fn) { if (!st.dirty || Date.now() - guardAt < 4000) { guardAt = 0; fn(); return; } guardAt = Date.now(); toast("Unsaved comments. Press again to discard them."); }
+async function openFile() {
+  guard(async () => {
+    if (window.showOpenFilePicker) {
+      try { const [fh] = await showOpenFilePicker({ types: [{ description: "Markdown", accept: { "text/markdown": [".md", ".markdown"], "text/plain": [".txt"] } }] }); const f = await fh.getFile(); load(f.name, await f.text(), fh); return; } catch (e) { if (e.name === "AbortError") return; }
+    }
+    $("#file").click();
+  });
+}
+$("#file").addEventListener("change", async (e) => { const f = e.target.files[0]; if (f) load(f.name, await f.text(), null); e.target.value = ""; });
+async function saveFile() {
+  const text = serialize(); if (serialize.skipped) toast(serialize.skipped + " anchor(s) crossed formatting; their notes are saved without inline tags");
+  if (st.handle) { try { const w = await st.handle.createWritable(); await w.write(text); await w.close(); st.dirty = false; renderHead(); persist(); toast("Saved " + st.name); return; } catch (e) { st.handle = null; } }
+  if (window.showSaveFilePicker) { try { const fh = await showSaveFilePicker({ suggestedName: st.name, types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }] }); const w = await fh.createWritable(); await w.write(text); await w.close(); st.handle = fh; st.name = fh.name; st.dirty = false; renderHead(); persist(); toast("Saved " + st.name); return; } catch (e) { if (e.name === "AbortError") return; } }
+  const a = h("a", { href: URL.createObjectURL(new Blob([text], { type: "text/markdown" })), download: st.name }); document.body.append(a); a.click(); a.remove();
+  st.dirty = false; renderHead(); persist(); toast("Downloaded " + st.name + ". Use Copy .md if nothing arrived.");
+}
+async function copyMd() {
+  const text = serialize();
+  try { await navigator.clipboard.writeText(text); toast("Copied markdown with comments"); }
+  catch (e) { const ta = h("textarea", { style: "position:fixed;opacity:0" }); ta.value = text; document.body.append(ta); ta.select(); try { document.execCommand("copy"); toast("Copied markdown with comments"); } catch (e2) { toast("Copy blocked by this browser"); } ta.remove(); }
+}
+$("#openBtn").addEventListener("click", openFile);
+$("#saveBtn").addEventListener("click", saveFile);
+$("#copyBtn").addEventListener("click", copyMd);
+$("#railToggle").addEventListener("click", () => $("#app").classList.toggle("rail-open"));
+$("#showResolved").addEventListener("change", (e) => { st.showResolved = e.target.checked; paint(); renderRail(); });
+$("#author").value = st.author;
+$("#author").addEventListener("input", (e) => { st.author = e.target.value.trim() || "Me"; store("markcomms.author", st.author); });
+$("#pasteBtn").addEventListener("click", () => { $("#more").open = false; guard(() => { $("#pasteDlg").showModal(); $("#pasteText").focus(); }); });
+$("#pasteCancel").addEventListener("click", () => $("#pasteDlg").close());
+$("#pasteForm").addEventListener("submit", () => { const t = $("#pasteText").value; if (t.trim()) load($("#pasteName").value.trim() || "pasted.md", t, null); $("#pasteText").value = ""; });
+$("#resetBtn").addEventListener("click", () => { $("#more").open = false; guard(() => { store("markcomms.draft", null); loadExample(); }); });
+addEventListener("dragover", (e) => e.preventDefault());
+addEventListener("drop", async (e) => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) guard(async () => load(f.name, await f.text(), null)); });
+addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); saveFile(); } });
+
+/* ============ example document ============ */
+const EXAMPLE = `# Field notes on a draft
+
+This is an **example document**. Select any words in it and tap *Comment* to leave a note in the margin. Notes live in the \`.md\` file itself, so the file you save can be dropped straight into an AI coding session.
+
+## How it works
+
+- Highlights are stored as \`[text](markcomms:ID)\` links. Files from the old Sidemarkr open too and are saved in the new format.
+- Each note is also written as a footnote with its selected text, author and time.
+- Opening a file that already has notes puts the highlights back.
+
+> Quotes, [links](https://example.com) and tables render too, though the page is for reviewing, not editing.
+
+| Where | What you do |
+| --- | --- |
+| Chrome or Edge | Save writes back to the file you opened |
+| Other browsers | Save downloads a copy, and Copy .md puts it on the clipboard |
+`;
+function loadExample() {
+  load("example.md", EXAMPLE, null);
+  const mk = (text, body, extra) => { const r = findRange(text, 0); if (!r) return; st.comments.push({ id: uid(), parentId: null, selectedText: text, createdAt: new Date(Date.now() - (extra || 0)).toISOString(), resolved: false, orphaned: false, offset: r.ds, length: r.de - r.ds, author: "Example", body, ds: r.ds, de: r.de }); };
+  mk("Files from the old Sidemarkr open too", "Example comment. Replace this file with your own draft using Open.", 120000);
+  mk("Select any words in it", "Example comment. Resolve or delete these when you are done.", 60000);
+  st.dirty = false; paint(); renderRail(); renderHead();
+}
+function boot() {
+  let d = null; try { d = JSON.parse(store("markcomms.draft") || "null"); } catch (e) {}
+  if (d && d.text) { load(d.name || "draft.md", d.text, null); st.dirty = !!d.dirty; renderHead(); } else loadExample();
+}
+window.__markcomms = { st, load, serialize, findRange, anchorOk, parseCommentsSection, stripAnchors, get docText() { return docText; } };
+boot();
+</script>
