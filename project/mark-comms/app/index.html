@@ -631,7 +631,7 @@ function renderRail() {
     box.append(card);
   }
 }
-function renderHead() { $("#fname").textContent = st.name; $("#dirty").hidden = !st.dirty; document.title = (st.dirty ? "• " : "") + st.name + " · mark-comms"; }
+function renderHead() { $("#fname").textContent = st.name; $("#dirty").hidden = !st.dirty; document.title = "mark-comms"; // constant on purpose: Umami sends document.title, and a filename is content }
 function focusComment(id, scrollDoc) {
   st.active = id; paint(); renderRail();
   const mk = $('#doc mark[data-ids~="' + id + '"]');
